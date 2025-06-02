@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, cross_validate
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
 from sklearn.preprocessing import LabelEncoder, label_binarize
@@ -42,12 +42,12 @@ def preprocess_text(text):
     return ' '.join(tokens)
 
 def plot_class_distribution(y, title):
-    """Plot class distribution"""
-    plt.figure(figsize=(8, 6))
+    """Plot class distribution with percentages"""
+    plt.figure(figsize=(10, 6))
     ax = sns.countplot(x=y)
-    plt.title(title)
-    plt.xlabel('Class')
-    plt.ylabel('Count')
+    plt.title(title, pad=20, size=14)
+    plt.xlabel('Class', size=12)
+    plt.ylabel('Count', size=12)
     
     # Calculate percentages
     total = len(y)
@@ -64,76 +64,24 @@ def plot_class_distribution(y, title):
     plt.show()
 
 def plot_confusion_matrix(y_true, y_pred, title):
-    """Plot confusion matrix with custom styling to match reference"""
+    """Plot confusion matrix with metrics"""
     cm = confusion_matrix(y_true, y_pred)
     
     plt.figure(figsize=(10, 8))
-    
-    # Create custom colormap similar to reference
-    colors = ['#ffff00', '#2f4f4f', '#4b0082']  # yellow, darkslategray, indigo
-    n_bins = 200
-    custom_cmap = plt.cm.get_cmap('viridis', n_bins)
-    
-    # Plot heatmap
     sns.heatmap(cm, 
                 annot=True, 
                 fmt='d',
                 cmap='viridis',
                 square=True,
                 cbar=True,
-                cbar_kws={"shrink": .8, "label": ""},
-                annot_kws={"size": 12, "weight": "bold"},
                 xticklabels=['0', '1', '2'],
                 yticklabels=['0', '1', '2'])
     
-    plt.title('Confusion Matrix', pad=20, size=14)
+    plt.title(title, pad=20, size=14)
     plt.ylabel('True label', size=12)
     plt.xlabel('Predicted label', size=12)
-    
-    # Adjust layout
     plt.tight_layout()
     plt.show()
-    
-    # Print confusion matrix metrics
-    print(f"\nConfusion Matrix Metrics:")
-    print("-" * 50)
-    
-    # Calculate and print metrics for each class
-    for i in range(cm.shape[0]):
-        TP = cm[i, i]
-        FP = np.sum(cm[:, i]) - TP
-        FN = np.sum(cm[i, :]) - TP
-        TN = np.sum(cm) - (TP + FP + FN)
-        
-        accuracy = (TP + TN) / np.sum(cm)
-        precision = TP / (TP + FP) if (TP + FP) > 0 else 0
-        recall = TP / (TP + FN) if (TP + FN) > 0 else 0
-        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-        
-        print(f"\nClass {i}:")
-        print(f"True Positives (TP): {TP}")
-        print(f"False Positives (FP): {FP}")
-        print(f"False Negatives (FN): {FN}")
-        print(f"True Negatives (TN): {TN}")
-        print(f"Accuracy: {accuracy:.3f}")
-        print(f"Precision: {precision:.3f}")
-        print(f"Recall: {recall:.3f}")
-        print(f"F1-score: {f1:.3f}")
-    
-    # Overall accuracy
-    print(f"\nOverall Accuracy: {np.trace(cm) / np.sum(cm):.3f}")
-    
-    # Create table with metrics
-    metrics_table = pd.DataFrame({
-        'Class': ['0', '1', '2'],
-        'Precision': [cm[i,i]/np.sum(cm[:,i]) if np.sum(cm[:,i]) > 0 else 0 for i in range(3)],
-        'Recall': [cm[i,i]/np.sum(cm[i,:]) if np.sum(cm[i,:]) > 0 else 0 for i in range(3)],
-        'F1-Score': [2*(cm[i,i]/np.sum(cm[:,i]))*(cm[i,i]/np.sum(cm[i,:]))/((cm[i,i]/np.sum(cm[:,i]))+(cm[i,i]/np.sum(cm[i,:]))) 
-                    if (np.sum(cm[:,i]) > 0 and np.sum(cm[i,:]) > 0) else 0 for i in range(3)]
-    })
-    
-    print("\nMetrics per Class:")
-    print(metrics_table.round(3).to_string(index=False))
 
 def plot_roc_curves(y_test, y_score, n_classes):
     """Plot ROC curves for each class"""
@@ -160,8 +108,8 @@ def plot_roc_curves(y_test, y_score, n_classes):
     plt.legend(loc="lower right")
     plt.show()
 
-# Load data
-print("Loading and preprocessing data...")
+# Load and preprocess data
+print("\n=== Data Loading and Preprocessing ===")
 excel_path = "clean_data (1) - Copy.xlsx"
 df = pd.read_excel(excel_path)
 
@@ -169,14 +117,15 @@ df = pd.read_excel(excel_path)
 df = df.dropna(subset=['text ', 'label'])
 df['processed_text'] = df['text '].apply(preprocess_text)
 
-# Display preprocessing results
-print("\n=== Preprocessing Statistics ===")
+# Display preprocessing statistics
+print("\nPreprocessing Statistics:")
+print("-" * 50)
 print(f"Total samples: {len(df)}")
 print(f"Average text length before preprocessing: {df['text '].str.len().mean():.1f} characters")
 print(f"Average text length after preprocessing: {df['processed_text'].str.len().mean():.1f} characters")
 
 # Plot original class distribution
-print("\n=== Class Distribution Before Balancing ===")
+print("\nClass Distribution Before Balancing:")
 plot_class_distribution(df['label'], 'Class Distribution Before Balancing')
 
 # Prepare features
@@ -188,43 +137,113 @@ y = df['label']
 X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=0.1, random_state=42, stratify=y)
 X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=0.22, random_state=42, stratify=y_temp)
 
-print("\n=== Data Split Statistics ===")
+print("\nData Split Statistics:")
+print("-" * 50)
 print(f"Training set: {X_train.shape[0]} samples ({X_train.shape[0]/X.shape[0]*100:.1f}%)")
 print(f"Validation set: {X_val.shape[0]} samples ({X_val.shape[0]/X.shape[0]*100:.1f}%)")
 print(f"Test set: {X_test.shape[0]} samples ({X_test.shape[0]/X.shape[0]*100:.1f}%)")
 
 # Apply SMOTE
+print("\n=== Applying SMOTE for Data Balancing ===")
 smote = SMOTE(random_state=42)
 X_train_balanced, y_train_balanced = smote.fit_resample(X_train, y_train)
 
-print("\n=== Class Distribution After SMOTE ===")
+print("\nClass Distribution After SMOTE:")
 plot_class_distribution(y_train_balanced, 'Class Distribution After SMOTE')
 
-# Hyperparameter tuning
+# Perform detailed cross-validation
+print("\n=== Detailed Cross-validation Results ===")
+base_model = xgb.XGBClassifier(
+    objective='multi:softprob',
+    random_state=42,
+    n_jobs=-1  # Use all CPU cores
+)
+
+# Get detailed metrics for each fold
+cv_results = cross_validate(
+    base_model, 
+    X_train_balanced, 
+    y_train_balanced,
+    cv=5,
+    scoring=['accuracy', 'precision_macro', 'recall_macro', 'f1_macro'],
+    return_train_score=True,
+    n_jobs=-1  # Use all CPU cores
+)
+
+# Create detailed results table
+fold_results = pd.DataFrame({
+    'Fold': range(1, 6),
+    'Train Accuracy': cv_results['train_accuracy'],
+    'Val Accuracy': cv_results['test_accuracy'],
+    'Train Precision': cv_results['train_precision_macro'],
+    'Val Precision': cv_results['test_precision_macro'],
+    'Train Recall': cv_results['train_recall_macro'],
+    'Val Recall': cv_results['test_recall_macro'],
+    'Train F1': cv_results['train_f1_macro'],
+    'Val F1': cv_results['test_f1_macro']
+})
+
+# Add mean and std rows
+mean_row = fold_results.mean().to_frame('Mean').T
+std_row = fold_results.std().to_frame('Std').T
+fold_results = pd.concat([fold_results, mean_row, std_row])
+
+# Format the table
+print("\nDetailed Cross-validation Results:")
+print(tabulate(fold_results.round(3), headers='keys', tablefmt='grid', showindex=False))
+
+# Hyperparameter tuning with optimized parameter grid
 print("\n=== Hyperparameter Tuning ===")
 param_grid = {
-    'max_depth': [3, 5, 7],
-    'learning_rate': [0.01, 0.1],
-    'n_estimators': [100, 200],
-    'min_child_weight': [1, 3],
-    'gamma': [0, 0.1]
+    'max_depth': [3, 5],
+    'learning_rate': [0.1],  # Reduced learning rate options
+    'n_estimators': [100],   # Reduced number of estimators
+    'min_child_weight': [1],
+    'gamma': [0],
+    'subsample': [0.8],      # Added subsample parameter
+    'colsample_bytree': [0.8]  # Added column sampling parameter
 }
 
-xgb_clf = xgb.XGBClassifier(objective='multi:softprob', random_state=42)
-grid_search = GridSearchCV(xgb_clf, param_grid, cv=5, scoring='f1_macro', n_jobs=-1)
+# Create and configure the GridSearchCV with verbose output
+grid_search = GridSearchCV(
+    estimator=xgb.XGBClassifier(
+        objective='multi:softprob',
+        random_state=42,
+        n_jobs=-1,  # Use all CPU cores for individual model
+        verbosity=0  # Reduce XGBoost verbosity
+    ),
+    param_grid=param_grid,
+    cv=5,
+    scoring='f1_macro',
+    n_jobs=-1,  # Use all CPU cores for parallel grid search
+    verbose=2    # Add verbosity to track progress
+)
+
+print("\nStarting Grid Search (this may take a few minutes)...")
 grid_search.fit(X_train_balanced, y_train_balanced)
 
-print("Best parameters:", grid_search.best_params_)
-print("Best cross-validation score:", grid_search.best_score_)
+print("\nBest Parameters:")
+print("-" * 50)
+for param, value in grid_search.best_params_.items():
+    print(f"{param}: {value}")
+print(f"\nBest cross-validation score: {grid_search.best_score_:.3f}")
 
-# Cross-validation
-cv_scores = cross_val_score(grid_search.best_estimator_, X_train_balanced, y_train_balanced, cv=5)
-print("\n=== Cross-validation Scores ===")
-print(f"Mean CV Score: {cv_scores.mean():.3f} (+/- {cv_scores.std() * 2:.3f})")
+# Train final model with best parameters
+print("\n=== Model Evaluation ===")
+final_model = xgb.XGBClassifier(
+    **grid_search.best_params_,
+    objective='multi:softprob',
+    random_state=42,
+    n_jobs=-1,  # Use all CPU cores
+    verbosity=0
+)
 
-# Train final model
-final_model = xgb.XGBClassifier(**grid_search.best_params_, random_state=42)
-final_model.fit(X_train_balanced, y_train_balanced)
+print("\nTraining final model...")
+final_model.fit(
+    X_train_balanced,
+    y_train_balanced,
+    verbose=False
+)
 
 # Evaluate on all sets
 sets = {
@@ -233,20 +252,25 @@ sets = {
     'Test': (X_test, y_test)
 }
 
-print("\n=== Model Evaluation ===")
 for set_name, (X_set, y_set) in sets.items():
-    predictions = final_model.predict(X_set)
     print(f"\n{set_name} Set Results:")
-    print("=" * 60)
+    print("-" * 50)
+    predictions = final_model.predict(X_set)
+    
+    print(f"\nClassification Report - {set_name} Set:")
     print(classification_report(y_set, predictions))
+    
+    print(f"\nConfusion Matrix - {set_name} Set:")
     plot_confusion_matrix(y_set, predictions, f'Confusion Matrix - {set_name} Set')
 
 # ROC curves for test set
+print("\n=== ROC Curves ===")
 y_test_bin = label_binarize(y_test, classes=np.unique(y))
 y_score = final_model.predict_proba(X_test)
 plot_roc_curves(y_test_bin, y_score, n_classes=3)
 
-# Feature importance
+# Feature importance visualization
+print("\n=== Feature Importance Analysis ===")
 feature_importance = pd.DataFrame({
     'feature': tfidf.get_feature_names_out(),
     'importance': final_model.feature_importances_
@@ -260,10 +284,14 @@ plt.tight_layout()
 plt.show()
 
 # Save results
+print("\n=== Saving Results ===")
 predictions_df = pd.DataFrame({
     'Text': df.loc[y_test.index, 'text '],
     'True_Label': y_test,
-    'Predicted_Label': final_model.predict(X_test)
+    'Predicted_Label': final_model.predict(X_test),
+    'Probability_Class_0': y_score[:, 0],
+    'Probability_Class_1': y_score[:, 1],
+    'Probability_Class_2': y_score[:, 2]
 })
 predictions_df.to_csv('detailed_classification_results.csv', index=False)
 print("\nDetailed predictions have been saved to 'detailed_classification_results.csv'") 
