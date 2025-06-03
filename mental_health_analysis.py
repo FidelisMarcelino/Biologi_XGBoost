@@ -1,3 +1,10 @@
+# Mental Health Analysis
+# Author:
+# - Ahmad Syafiq Hartono – 2702317153 
+# - Enrico Cen - 2702309813 
+# - Fidelis Marcelino - 2702312556 
+# Satrio Halim Abdurrahman - 2702298545 
+
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, cross_validate
